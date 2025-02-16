@@ -19,7 +19,6 @@ class Banner(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     # имя банера
     name: Mapped[str] = mapped_column(String(15), unique=True)
-    image: Mapped[str] = mapped_column(String(150), nullable=True)
     description: Mapped[str] = mapped_column(Text, nullable=True)
 
 
@@ -31,12 +30,21 @@ class Category(Base):
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     image: Mapped[str] = mapped_column(String(150), nullable=True)
 
+class PodCategory(Base):
+    __tablename__ = 'podcategory'
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    category_id: Mapped[int] = mapped_column(ForeignKey('category.id', ondelete='CASCADE'), nullable=False)
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    category: Mapped['Category'] = relationship(backref='podcategory')
+
 # место доставки
 class Place(Base):
     __tablename__ = 'place'
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
+    filter_categorys: Mapped[str] = mapped_column(String, nullable=True)
 
 
 class Sirop(Base):
@@ -71,9 +79,8 @@ class Product(Base):
     price: Mapped[str] = mapped_column(Text, nullable=False)
     # image: Mapped[str] = mapped_column(String(150), nullable=False)
     # id категории, CASCADE - если удаляется категория, то все продукты также удалятся
-    category_id: Mapped[int] = mapped_column(ForeignKey('category.id', ondelete='CASCADE'), nullable=False)
-    # ссылка на категорию товара
-    category: Mapped['Category'] = relationship(backref='product')
+    category_id: Mapped[int] =  mapped_column(ForeignKey('category.id', ondelete='CASCADE'), nullable=True)
+    podcategory_id: Mapped[int] = mapped_column(ForeignKey('podcategory.id', ondelete='CASCADE'), nullable=True)
 
 
 class User(Base):
@@ -85,7 +92,6 @@ class User(Base):
     first_name: Mapped[str] = mapped_column(String(150), nullable=True)
     last_name: Mapped[str] = mapped_column(String(150), nullable=True)
     phone: Mapped[str] = mapped_column(String(13), nullable=True)
-    place: Mapped[int] = mapped_column(Integer, nullable=True)
 
 
 class Cart(Base):
@@ -106,8 +112,9 @@ class Cart(Base):
     sirop: Mapped[int] = mapped_column(ForeignKey('sirop.id', ondelete='CASCADE'), nullable=True)
     # обратная взаимосвязь с таблицами user и product,
     # чтобы выбрать все корзины пользователя и дополнительную информацию о товаре, который заказан
-    user: Mapped['User'] = relationship(backref='cart')
+    place_id: Mapped[int] = mapped_column(ForeignKey('place.id', ondelete='CASCADE'), nullable=True)
     product: Mapped['Product'] = relationship(backref='cart')
+    place: Mapped['Place'] = relationship(backref='cart')
 
 
 class AdminList(Base):
@@ -125,3 +132,4 @@ class Order(Base):
     data: Mapped[str] = mapped_column(String(100), nullable=False)
     cards: Mapped[str] = mapped_column(String(150), nullable=False)
     type_give: Mapped[str] = mapped_column(String(20), nullable=False)
+    summa: Mapped[float] = mapped_column(Float, nullable=False)

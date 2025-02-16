@@ -5,23 +5,16 @@ from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 
 from config import TOKEN
-from handlers import order_handler
 
-# наши импорты
-# импортируем наш роутер для обработки событий в личке
 from handlers.user_private import user_private_router
-# импортируем наш роутер для обработки событий в группе
-from handlers.user_group import user_group_router
-# импортируем наш роутер для администрирования
 from handlers.admin_private import admin_router
-from handlers.query import query_router
-# импортируем функции для работы с БД
-from database.engine import create_db, drop_db, session_maker
-# импортируем наш промежуточный слой для сессий БД
-from middlewares.db import DataBaseSession
 
-# импортируем наши команды для бота (private - для личных сообщений)
-# from common.bot_cmds_list import private
+from database.engine import create_db, drop_db, session_maker
+from database.orm_query import (orm_get_orders, orm_get_placelist, orm_update_user_order_status,
+                                orm_get_user_carts, orm_get_dop, orm_get_sirop)
+from kbds.inline import get_place_order_btns
+
+from middlewares.db import DataBaseSession
 
 # инициализируем класс бота, передаем токен
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -30,15 +23,43 @@ bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher(storage=MemoryStorage())
 
 # подключаем наши роутеры (работают в том же порядке)
-dp.include_routers(query_router, admin_router, user_private_router, user_group_router)
+dp.include_routers(admin_router, user_private_router)
+
+async def loop_order(session_maker):
+    while True:
+        async with session_maker() as session:
+            placelist = await orm_get_placelist(session)
+            # print(f"{placelist=}")
+            for place in placelist:
+                orders = await orm_get_orders(session, "send", place.place)
+                for order in orders:
+                    cards = await orm_get_user_carts(session, order.user_id, order.cards, status="send")
+                    message = f"Новый заказ №{order.id}!\n"
+                    for i, card in enumerate(cards):
+                        message += f"{i+1}.{card.product.name} {card.weight}мл"
+                        if card.dop:
+                            dop = await orm_get_dop(session, card.dop)
+                            message += f"\n\t{dop.name}"
+                        if card.sirop:
+                            sirop = await orm_get_sirop(session, card.sirop)
+                            message += f"\n\tСироп: {sirop.name}"
+                        if card.quantity > 1:
+                            message += f"\nЦена {card.price}₽ X {card.quantity} = {card.price * card.quantity}₽\n\n"
+                        else:
+                            message += f"\nЦена {card.price}₽\n\n"
+
+                    message += f"Способ получения - {order.type_give}\n"
+                    message += f"Пожелание к заказу - {order.data}\n"
+                    message += f"Итоговая цена - {order.summa}₽"
+                    await orm_update_user_order_status(session, order.user_id, order.id, "give")
+                    kb = get_place_order_btns(order.id)
+                    await bot.send_message(place.user_id, message, reply_markup=kb)
+        await asyncio.sleep(5)
+
 
 # функция старта
-async def on_startup(bot):
-    # удалить БД (при изменении моделей или orm)
-    # await drop_db()
-    # создать БД
+async def on_startup(bot: Bot):
     await create_db()
-
 
 # функция выключения
 async def on_shutdown(bot):
@@ -57,7 +78,7 @@ async def main(arguments):
         return
 
     # добавляем список id наших администраторов
-    bot.my_admins_list = [880629533]
+    bot.my_admins_list = [880629533, 5786431448]
     
     # dp.include_router(order_handler.router)
 
@@ -72,24 +93,16 @@ async def main(arguments):
 
     # отвечаем только, когда бот онлайн
     await bot.delete_webhook(drop_pending_updates=True)
-    # удалить все наши команды для лички
-    # await bot.delete_my_commands(scope=types.BotCommandScopeAllPrivateChats())
-
-    # отправляем все наши команды, которые будут у бота (только в личке)
-    # await bot.set_my_commands(commands=private, scope=types.BotCommandScopeAllPrivateChats())
-
-    # слушаем сервер telegram и постоянно спрашиваем его про наличие каких-то изменений
-    # resolve_used_update_types - все изменения, которые мы используем будут отслеживаться у сервера telegram
-    # например, ALLOWED_UPDATES = ['message', 'edited_message', 'callback_query']
-    # можно добавить skip_events: 'edited_message' - пример, чтобы временно ограничить какие-то события
 
     print("#######################")
     print('#                     #')
     print('#     Бот запущен!    #')
     print('#                     #')
     print("#######################")
-
+    task = asyncio.create_task(loop_order(session_maker))
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+    task.cancel()
+
 
 if __name__ == '__main__':
     import asyncio
