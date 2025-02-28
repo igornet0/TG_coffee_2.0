@@ -7,7 +7,7 @@ from database.models import Base
 from database.orm_query import (orm_add_banner_description, orm_create_dop,
                                 orm_create_places, orm_create_categories,
                                 orm_create_podcategories, org_add_product,
-                                orm_create_sirops)
+                                orm_create_sirops, orm_drop_sirops)
 from common.texts_for_db import (categories, description_for_info_pages, 
                                  places, milk, sirops)
 
@@ -29,6 +29,7 @@ async def create_db():
         await conn.run_sync(Base.metadata.create_all)
     # открываем сессию и записываем категории при старте бота и описание для страниц баннера
     async with session_maker() as session:
+        await orm_drop_sirops(session)
         await orm_create_sirops(session, sirops)
         await orm_create_categories(session, categories.keys())
         await orm_create_podcategories(session, categories)

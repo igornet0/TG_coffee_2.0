@@ -113,6 +113,7 @@ class Cart(Base):
     # обратная взаимосвязь с таблицами user и product,
     # чтобы выбрать все корзины пользователя и дополнительную информацию о товаре, который заказан
     place_id: Mapped[int] = mapped_column(ForeignKey('place.id', ondelete='CASCADE'), nullable=True)
+    
     product: Mapped['Product'] = relationship(backref='cart')
     place: Mapped['Place'] = relationship(backref='cart')
 
@@ -133,3 +134,5 @@ class Order(Base):
     cards: Mapped[str] = mapped_column(String(150), nullable=False)
     type_give: Mapped[str] = mapped_column(String(20), nullable=False)
     summa: Mapped[float] = mapped_column(Float, nullable=False)
+
+    user: Mapped['User'] = relationship(backref='order')

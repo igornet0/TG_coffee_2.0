@@ -45,6 +45,8 @@ from kbds.reply import get_phone_keyboard
 
 from handlers.place_processing import choise_place
 
+from datetime import datetime as dt
+
 def parser_replace_text(text: str, value_replace: dict[str, str]) -> str:
     matches = re.findall(r'/(.*?)/', text)
     for match in matches:
@@ -87,7 +89,8 @@ async def catalog(session: AsyncSession, level: int, menu_name: str, user_id,
                   answer: tuple | None = None):
     
     image = None
-    
+    answer_flag = False
+
     if place is None:
         cards = await orm_get_user_carts(session, user_id)
         if menu_name != "new_order":
@@ -102,12 +105,13 @@ async def catalog(session: AsyncSession, level: int, menu_name: str, user_id,
             
         if len(cards) != 0:
             await orm_delete_user_card(session, user_id)
-            answer = ("Новый заказ📃", True)
+            answer = "Новый заказ📃"
+            answer_flag = True
         
         banner = await orm_get_banner(session, "places_change")
         places = await orm_get_place(session)
         kbds = get_place_btns(level=level, menu_name=menu_name, places=places)
-        return {"kbds": kbds, "message": banner.description, "answer": answer}
+        return {"kbds": kbds, "message": banner.description, "answer": answer, "answer_flag": answer_flag}
     
     banner = await orm_get_banner(session, menu_name)
 
@@ -155,14 +159,14 @@ async def add_product(session: AsyncSession, level: int,
 
     elif dop is None and product.category_id != 3:
         dops = await orm_get_dops(session, product.category_id)
-        message = "Заменить молок?" if product.category_id == 1 else "Добавить ?"
+        message = "Заменить молоко?" if product.category_id == 1 else "Добавить ?"
         kbds = get_product_dop_btns(level, menu_name, place,
                                     price, weight, product_id, dops,
                                     sizes=(2,2))
 
     elif sirop is None and product.category_id == 1:
         sirops = await orm_get_sirops(session)
-        message = "Добавить сироп? +30₽"
+        message = "Добавить сироп? +35₽"
         kbds = get_product_sirop_btns(level, menu_name, place, price, weight, product_id, dop, sirops)
     
     else:
@@ -259,6 +263,15 @@ async def card_menu(session: AsyncSession, level: int, menu_name: str, page: int
         return {"kbds": kb, "message": message_output, "answer": answer}
     
     elif "send" in menu_name or "time" in menu_name:
+        if "send" in menu_name:
+            from config import TIME_ZONE
+            current_time = dt.now().time()
+            start_time_str, end_time_str = TIME_ZONE.split('/')
+            start_time = dt.strptime(start_time_str, '%H:%M').time()
+            end_time = dt.strptime(end_time_str, '%H:%M').time()
+            if current_time < start_time or current_time > end_time:
+                return {"kbds": None, "message": None, "answer": f"Принимаем заказы с {start_time_str} до {end_time_str}", "answer_flag": False}
+                
         if order_id:
             order = await orm_get_user_order(session, user_id, 
                                              order_id=order_id, status="time")
