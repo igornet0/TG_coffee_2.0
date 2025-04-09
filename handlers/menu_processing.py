@@ -89,8 +89,7 @@ async def catalog(session: AsyncSession, level: int, menu_name: str, user_id,
                   answer: tuple | None = None):
     
     image = None
-    answer_flag = False
-
+    
     if place is None:
         cards = await orm_get_user_carts(session, user_id)
         if menu_name != "new_order":
@@ -106,12 +105,11 @@ async def catalog(session: AsyncSession, level: int, menu_name: str, user_id,
         if len(cards) != 0:
             await orm_delete_user_card(session, user_id)
             answer = "Новый заказ📃"
-            answer_flag = True
         
         banner = await orm_get_banner(session, "places_change")
         places = await orm_get_place(session)
         kbds = get_place_btns(level=level, menu_name=menu_name, places=places)
-        return {"kbds": kbds, "message": banner.description, "answer": answer, "answer_flag": answer_flag}
+        return {"kbds": kbds, "message": banner.description, "answer": answer}
     
     banner = await orm_get_banner(session, menu_name)
 
@@ -159,14 +157,14 @@ async def add_product(session: AsyncSession, level: int,
 
     elif dop is None and product.category_id != 3:
         dops = await orm_get_dops(session, product.category_id)
-        message = "Заменить молоко?" if product.category_id == 1 else "Добавить ?"
+        message = "Заменить молок?" if product.category_id == 1 else "Добавить ?"
         kbds = get_product_dop_btns(level, menu_name, place,
                                     price, weight, product_id, dops,
                                     sizes=(2,2))
 
     elif sirop is None and product.category_id == 1:
         sirops = await orm_get_sirops(session)
-        message = "Добавить сироп? +35₽"
+        message = "Добавить сироп? +30₽"
         kbds = get_product_sirop_btns(level, menu_name, place, price, weight, product_id, dop, sirops)
     
     else:
@@ -206,6 +204,12 @@ async def card_menu(session: AsyncSession, level: int, menu_name: str, page: int
                     data: str | None = None, order_id: int | None = None,
                     answer: str | tuple[str,bool] = None):
     
+    if isinstance(answer, tuple):
+        answer = answer[0]
+        flag = answer[1]
+    else:
+        flag = False
+
     cards = await orm_get_user_carts(session, user_id, status="new")
 
     if menu_name == "phone_change":
@@ -214,10 +218,11 @@ async def card_menu(session: AsyncSession, level: int, menu_name: str, page: int
     elif menu_name == "order_delete" and not order_id is None:
         order = await orm_get_user_order(session, user_id, 
                                              order_id=order_id, status="time")
-        order = order[0]
+        order = order
         for card in order.cards.split("/"):
             if card.isdigit():
                 await orm_update_status_card(session, int(card), "cancel")
+
         await orm_update_user_order_status(session, user_id, order_id, "cancel")
 
         data = await main_menu(session, 0, "main", user_id)
@@ -228,7 +233,6 @@ async def card_menu(session: AsyncSession, level: int, menu_name: str, page: int
         if order_id:
             order = await orm_get_user_order(session, user_id, 
                                              order_id=order_id, status="time")
-            order = order[0]
             cards_id = order.cards
             cards = await orm_get_user_carts(session, user_id, cards_id, status="time")
             data = order.data if menu_name == "type" else data
@@ -260,7 +264,7 @@ async def card_menu(session: AsyncSession, level: int, menu_name: str, page: int
         message_output += f"Пожелание к заказу - {data}\n"
         message_output += f"Итоговая цена - {total_price}₽"
         kb = send_btns(type_giv, data, order_id)
-        return {"kbds": kb, "message": message_output, "answer": answer}
+        return {"kbds": kb, "message": message_output, "answer": answer, "answer_flag": flag}
     
     elif "send" in menu_name or "time" in menu_name:
         if "send" in menu_name:
@@ -270,12 +274,11 @@ async def card_menu(session: AsyncSession, level: int, menu_name: str, page: int
             start_time = dt.strptime(start_time_str, '%H:%M').time()
             end_time = dt.strptime(end_time_str, '%H:%M').time()
             if current_time < start_time or current_time > end_time:
-                return {"kbds": None, "message": None, "answer": f"Принимаем заказы с {start_time_str} до {end_time_str}", "answer_flag": False}
+                return {"kbds": None, "message": None, "answer": f"Заказ можно сдать только в рабочее врем {TIME_ZONE}", "answer_flag": False}
                 
         if order_id:
             order = await orm_get_user_order(session, user_id, 
                                              order_id=order_id, status="time")
-            order = order[0]
             cards_id = order.cards
             cards = await orm_get_user_carts(session, user_id, cards_id, status="time")
             summa = 0
@@ -342,11 +345,12 @@ async def card_menu(session: AsyncSession, level: int, menu_name: str, page: int
             card = cards[page]
             product_id = card.product_id
             if menu_name == "page_delete":
-                answer = ("✅ Удалил", True)
+                answer = "✅ Удалил"
                 card = await orm_delete_from_cart(session, user_id, 
                                         product_id, card.dop, card.sirop)
                 
                 return await card_menu(session, level, "cart", page, user_id, answer=answer)
+            
             elif "page" in menu_name and len(cards) == 1:
                 return {"answer": "ℹ️У вас нет больше позиций"}
 

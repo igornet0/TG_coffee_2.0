@@ -3,8 +3,8 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
-
-from config import TOKEN
+from datetime import datetime
+from config import TOKEN, ADMINS
 
 from handlers.user_private import user_private_router
 from handlers.admin_private import admin_router
@@ -50,8 +50,7 @@ async def loop_order(session_maker):
 
                     message += f"Способ получения - {order.type_give}\n"
                     message += f"Пожелание к заказу - {order.data}\n"
-                    message += f"Итоговая цена - {order.summa}₽\n"
-                    message += f"Телефон пользователя - {order.user.phone}"
+                    message += f"Итоговая цена - {order.summa}₽"
                     await orm_update_user_order_status(session, order.user_id, order.id, "give")
                     kb = get_place_order_btns(order.id)
                     await bot.send_message(place.user_id, message, reply_markup=kb)
@@ -79,7 +78,7 @@ async def main(arguments):
         return
 
     # добавляем список id наших администраторов
-    bot.my_admins_list = [880629533, 5786431448]
+    bot.my_admins_list = ADMINS
     
     # dp.include_router(order_handler.router)
 

@@ -349,10 +349,6 @@ async def orm_delete_from_cart(session: AsyncSession, user_id: int,
         await session.delete(cart)
         await session.commit()
 
-async def orm_drop_sirops(session: AsyncSession):
-    query = delete(Sirop)
-    await session.execute(query)
-    await session.commit()
 
 async def orm_reduce_product_in_cart(session: AsyncSession, user_id: int, product_id: int):
     query = select(Cart).where(Cart.user_id == user_id, Cart.product_id == product_id).options(joinedload(Cart.product), joinedload(Cart.place))
@@ -390,7 +386,7 @@ async def orm_get_user_order(session: AsyncSession, user_id: int | None = None, 
     return result.scalars().all() if not order_id else result.scalar()
 
 async def orm_get_orders(session: AsyncSession, status: str, place: int):
-    query = select(Order).where(Order.status==status, Order.place==place).options(joinedload(Order.user))
+    query = select(Order).where(Order.status==status, Order.place==place)
 
     result = await session.execute(query)
     return result.scalars().all()
